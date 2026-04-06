@@ -1,0 +1,30 @@
+name: email-triage
+description: An environment for training AI agents to categorize and prioritize emails efficiently
+version: 1.0.0
+author: hackathon-participant
+
+observation_space:
+  type: object
+  model: env.Observation
+  
+action_space:
+  type: object
+  model: env.Action
+
+reward_range: [0.0, 1.0]
+
+tasks:
+  - id: easy
+    description: Categorize emails correctly
+    grader: env.grade_easy_task
+  - id: medium  
+    description: Categorize and prioritize emails
+    grader: env.grade_medium_task
+  - id: hard
+    description: Perfect triage under time pressure
+    grader: env.grade_hard_task
+
+endpoints:
+  baseline: /baseline
+  grader: /grader
+  tasks: /tasks

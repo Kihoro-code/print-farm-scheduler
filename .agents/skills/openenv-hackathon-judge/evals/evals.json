@@ -1,0 +1,82 @@
+{
+  "skill_name": "openenv-evaluator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Score my OpenEnv environment. It's in the current directory - I built an email triage simulator where an AI agent has to categorize and prioritize emails.",
+      "expected_output": "A structured evaluation report with scores in all 5 categories, validation checklist results, and specific code-level fixes",
+      "files": [],
+      "description": "Well-structured env with real-world utility"
+    },
+    {
+      "id": 2,
+      "prompt": "Can you evaluate my hackathon submission? I think it's ready but want to make sure before submitting. The env is a code review assistant that helps identify bugs.",
+      "expected_output": "Report identifying any gaps in the submission, checking for 3+ tasks, grader quality, and endpoint implementations",
+      "files": [],
+      "description": "Submission readiness check"
+    },
+    {
+      "id": 3,
+      "prompt": "How good is my environment? I made a CartPole variant with some modifications for the Meta hackathon.",
+      "expected_output": "Should flag potential DQ-2 (plagiarism/trivial modification) and low creativity score. Clear guidance on what needs to change.",
+      "files": [],
+      "description": "Potential disqualification case - derivative work"
+    },
+    {
+      "id": 4,
+      "prompt": "evaluate my openenv - its a customer support ticket router but I only have 2 tasks implemented so far. Is that enough or do I need more?",
+      "expected_output": "Should clearly identify V-5 failure (need 3+ tasks), calculate partial scores, and explain exactly what's needed to pass the minimum task requirement",
+      "files": [],
+      "description": "Edge case: Missing minimum task count (only 2 tasks)"
+    },
+    {
+      "id": 5,
+      "prompt": "Can you grade my hackathon env? I have the Python code working but haven't created a Dockerfile yet. Will that be a problem?",
+      "expected_output": "Should flag V-3 failure (Dockerfile missing), explain this is a disqualification trigger, and provide a template Dockerfile as a fix",
+      "files": [],
+      "description": "Edge case: Missing Dockerfile"
+    },
+    {
+      "id": 6,
+      "prompt": "score my submission please. The graders work but they always return either 0.0 or 1.0 depending on if the task was completed - is that ok?",
+      "expected_output": "Should note the binary reward issue in Section 3 (Environment Design - dense reward check) and explain why partial credit signals are important. Not a DQ but costs points.",
+      "files": [],
+      "description": "Edge case: Binary-only grader scores (no partial credit)"
+    },
+    {
+      "id": 7,
+      "prompt": "hey can you check if my openenv.yaml is correct? I'm not sure if I have all the required fields. Also my reset() function might have a bug where it doesn't fully clear state.",
+      "expected_output": "Should specifically check openenv.yaml against required schema, verify reset() implementation for state leakage, provide exact fixes for both issues",
+      "files": [],
+      "description": "Edge case: Spec compliance and state management issues"
+    },
+    {
+      "id": 8,
+      "prompt": "Evaluate my data cleaning environment. I need to make sure my /baseline, /grader, and /tasks endpoints are implemented correctly. The baseline endpoint should trigger my inference script and return scores.",
+      "expected_output": "Should specifically verify all three required endpoints exist, check their implementations match the spec, and confirm /baseline triggers inference and returns scores for all tasks",
+      "files": [],
+      "description": "Endpoint test: All three required endpoints"
+    },
+    {
+      "id": 9,
+      "prompt": "I built a scheduling assistant env but I'm not sure if my /tasks endpoint returns the right format. It should list all tasks and the action schema right? Can you check?",
+      "expected_output": "Should examine /tasks endpoint implementation, verify it returns task list with action schema (required fields for step actions), provide correct format if wrong",
+      "files": [],
+      "description": "Endpoint test: /tasks endpoint format verification"
+    },
+    {
+      "id": 10,
+      "prompt": "My /grader endpoint isn't working right - it's supposed to return the score after an episode but I'm getting errors. Can you evaluate my env and help me fix this?",
+      "expected_output": "Should identify /grader endpoint issues, explain the expected behavior (return grader score 0.0-1.0 after episode completion), and provide working implementation",
+      "files": [],
+      "description": "Endpoint test: /grader endpoint debugging"
+    },
+    {
+      "id": 11,
+      "prompt": "evaluate this - I have the env working locally but the baseline inference script hardcodes my API key instead of reading from environment variable. Is that a problem?",
+      "expected_output": "Should flag this as a V-4 issue (baseline must read OPENAI_API_KEY from env), explain the security concern, and provide fix to use os.environ or dotenv",
+      "files": [],
+      "description": "Edge case: Hardcoded API key in baseline script"
+    }
+  ]
+}

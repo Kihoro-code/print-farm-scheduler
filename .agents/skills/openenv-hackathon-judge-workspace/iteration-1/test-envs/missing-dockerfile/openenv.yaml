@@ -1,0 +1,19 @@
+name: data-cleaning
+description: Clean and prepare datasets
+version: 1.0.0
+
+observation_space:
+  model: env.Observation
+  
+action_space:
+  model: env.Action
+
+reward_range: [0.0, 1.0]
+
+tasks:
+  - id: easy
+    grader: env.grade_easy
+  - id: medium
+    grader: env.grade_medium
+  - id: hard
+    grader: env.grade_hard

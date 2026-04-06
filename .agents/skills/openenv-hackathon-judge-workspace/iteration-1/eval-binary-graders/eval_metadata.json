@@ -1,0 +1,12 @@
+{
+  "eval_id": 4,
+  "eval_name": "binary-graders-edge-case",
+  "prompt": "score my submission please. The graders work but they always return either 0.0 or 1.0 depending on if the task was completed - is that ok?",
+  "assertions": [
+    {"text": "Identifies binary reward issue in Environment Design section", "type": "pass_fail"},
+    {"text": "Does NOT trigger DQ-3 (graders do have conditional logic)", "type": "pass_fail"},
+    {"text": "Deducts points from Dense reward sub-check", "type": "scoring"},
+    {"text": "Explains why partial credit is important for learning", "type": "explanation"},
+    {"text": "Provides partial credit grader implementation as fix", "type": "quality"}
+  ]
+}

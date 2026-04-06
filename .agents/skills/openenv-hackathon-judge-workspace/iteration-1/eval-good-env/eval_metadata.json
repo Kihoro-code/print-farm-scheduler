@@ -1,0 +1,13 @@
+{
+  "eval_id": 1,
+  "eval_name": "well-structured-email-env",
+  "prompt": "Score my OpenEnv environment. It's in the current directory - I built an email triage simulator where an AI agent has to categorize and prioritize emails.",
+  "assertions": [
+    {"text": "Identifies environment as non-disqualified", "type": "pass_fail"},
+    {"text": "Scores Real-World Utility in Band A or C (16-30 pts)", "type": "range"},
+    {"text": "Verifies all 3 tasks exist with graders", "type": "pass_fail"},
+    {"text": "Checks all three required endpoints", "type": "pass_fail"},
+    {"text": "Produces structured evaluation in correct format", "type": "format"},
+    {"text": "Provides actionable fixes with code snippets", "type": "quality"}
+  ]
+}
