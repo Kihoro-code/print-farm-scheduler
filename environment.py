@@ -32,7 +32,7 @@ class Observation(BaseModel):
     step: int
     machines: list[MachineSnapshot]
     queue: list[JobSnapshot]
-    pending_arrivals: list[JobSnapshot]
+    pending_arrivals: list[JobSnapshot]  # Advance customer bookings visible ≤2 steps ahead
     completed_count: int
     deadlines_missed: int
     total_jobs_ever: int
@@ -68,8 +68,8 @@ IDLE_PENALTY = -0.01
 PREEMPT_PENALTY = -0.03
 SKIP_PENALTY = -0.005
 STEP_PENALTY = -0.001
-COMPLETION_BONUS = 0.15
-DEADLINE_MISS_PENALTY = -0.08
+COMPLETION_BONUS = 0.20
+DEADLINE_MISS_PENALTY = -0.10
 SPOOL_CHANGE_PENALTY = -0.01
 FAILURE_PENALTY = -0.02
 MAX_UTILIZATION_BONUS = 0.05
@@ -80,8 +80,8 @@ MIN_FILAMENT_G = 50.0
 MAX_FILAMENT_G = 200.0
 MIN_PRINT_STEPS = 1
 MAX_DEADLINE_SLACK = 12
-JOB_MIN_WEIGHT = 15.0
-JOB_MAX_WEIGHT = 80.0
+JOB_MIN_WEIGHT = 10.0
+JOB_MAX_WEIGHT = 60.0
 VISIBLE_AHEAD_STEPS = 2
 
 # Spool change cooldown (steps a machine spends swapping material)
@@ -117,11 +117,15 @@ class PrintFarmEnv:
     - Terminal reward: episode-end bonus based on overall completion rate.
     """
 
+    # 30 steps × 20 min/step = 10 hours — one factory shift.
+    # Episode length calibrated so easy tasks are solvable in ~10 steps,
+    # medium in ~20, and hard needs all 30 with optimal scheduling.
     STEP_DURATION_MINUTES: int = 20
 
     def __init__(
         self, seed: int | None = None, difficulty: str = "easy", max_steps: int = 30
     ):
+        self._seed = seed
         self._rng = random.Random(seed)
         self._difficulty = difficulty
         self.MAX_STEPS = max_steps
@@ -130,6 +134,7 @@ class PrintFarmEnv:
         self.reset()
 
     def reset(self) -> Observation:
+        self._rng = random.Random(self._seed)
         self._step_count = 0
         self._state = self._generate_initial_state()
         return self._get_observation()
@@ -544,8 +549,7 @@ class PrintFarmEnv:
         return False
 
     def _is_terminal(self) -> bool:
-        max_steps = getattr(self, "MAX_STEPS", 30)
-        if self._step_count >= max_steps:
+        if self._step_count >= self.MAX_STEPS:
             return True
         state = self._state
         if not state["queue"] and not state["pending_jobs"]:
@@ -560,30 +564,30 @@ class PrintFarmEnv:
         rng = self._rng
 
         if diff == "easy":
-            n_machines, n_jobs, n_arrivals = 2, 6, 0
+            n_machines, n_jobs, n_arrivals = 3, 7, 0
             n_materials = 1
             min_ps, max_ps = 1, 3
-            dl_range = (15, 28)
+            dl_range = (5, 15)
             arrival_range = (0, 0)
-            min_fil, max_fil = 100.0, 200.0
-            speed_range = (0.9, 1.1)
-            weight_cap_range = (80.0, 100.0)
+            min_fil, max_fil = 150.0, 300.0
+            speed_range = (0.95, 1.05)
+            weight_cap_range = (90.0, 100.0)
         elif diff == "medium":
-            n_machines, n_jobs, n_arrivals = 4, 8, 4
+            n_machines, n_jobs, n_arrivals = 4, 8, 3
             n_materials = 3
-            min_ps, max_ps = 1, 4
-            dl_range = (6, 22)
+            min_ps, max_ps = 1, 3
+            dl_range = (8, 20)
             arrival_range = (8, 14)
-            min_fil, max_fil = 60.0, 180.0
-            speed_range = (0.7, 1.3)
-            weight_cap_range = (60.0, 100.0)
+            min_fil, max_fil = 100.0, 220.0
+            speed_range = (0.8, 1.2)
+            weight_cap_range = (65.0, 100.0)
         else:
-            n_machines, n_jobs, n_arrivals = 6, 10, 6
+            n_machines, n_jobs, n_arrivals = 6, 14, 8
             n_materials = 5
-            min_ps, max_ps = 1, 5
-            dl_range = (3, 18)
-            arrival_range = (5, 22)
-            min_fil, max_fil = 40.0, 160.0
+            min_ps, max_ps = 2, 5
+            dl_range = (4, 12)
+            arrival_range = (4, 20)
+            min_fil, max_fil = 40.0, 120.0
             speed_range = (0.6, 1.4)
             weight_cap_range = (50.0, 100.0)
 

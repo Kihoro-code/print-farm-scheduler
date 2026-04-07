@@ -25,7 +25,7 @@ Scheduling print jobs across a multi-machine farm is a real NP-hard constrained 
 - **Machine differentiation** — machines vary in print speed (`speed_modifier`) and max build weight (`max_weight_g`)
 - **Wear degradation** — machine reliability starts at 95% and drops ~2% per hour of printing (minimum 50%)
 - **Preemption tradeoffs** — canceling a running job wastes progress but may free a machine for something urgent
-- **Partial observability** — future job arrivals are hidden until 2 steps before they appear
+- **Partial observability** — future job arrivals are hidden until 2 steps before they appear, simulating advance customer bookings that are confirmed shortly before production cutoff
 
 ## Action Space
 
@@ -41,7 +41,7 @@ Scheduling print jobs across a multi-machine farm is a real NP-hard constrained 
 Each observation contains:
 - `machines[]` — status (`idle`/`printing`/`changing_spool`), loaded material, filament remaining, speed modifier, max build weight, cumulative hours used, current job progress
 - `queue[]` — pending jobs with material, weight, print time, deadline
-- `pending_arrivals[]` — jobs arriving within the next 2 steps (partial observability)
+- `pending_arrivals[]` — advance customer bookings visible within the next 2 steps (simulates confirmed orders not yet in production queue)
 - `completed_count`, `deadlines_missed`, `total_jobs_ever`
 
 ## Material Compatibility
@@ -62,9 +62,9 @@ Each observation contains:
 
 | Task | Machines | Materials | Jobs | Arrivals | Speed Range | Wear | Max Steps |
 |------|----------|-----------|------|----------|-------------|------|-----------|
-| **Easy** | 2 | 1 (PLA) | 6 | 0 | 0.9–1.1× | Yes | 30 |
-| **Medium** | 4 | 3 (PLA, PETG, ABS) | 8 | 4 at step ~10 | 0.7–1.3× | Yes | 30 |
-| **Hard** | 6 | 5 (PLA, PETG, ABS, Nylon, TPU) | 10 | 6 in 2 waves | 0.6–1.4× | Yes | 30 |
+| **Easy** | 3 | 1 (PLA) | 7 | 0 | 0.95–1.05× | Yes | 30 |
+| **Medium** | 4 | 3 (PLA, PETG, ABS) | 8 | 3 at step ~10 | 0.8–1.2× | Yes | 30 |
+| **Hard** | 6 | 5 (PLA, PETG, ABS, Nylon, TPU) | 14 | 8 in waves | 0.6–1.4× | Yes | 30 |
 
 ### Grading
 
@@ -101,13 +101,13 @@ Rewards are normalized to [-1, 0, 1] with named breakdown components:
 
 | Component | Value | Trigger |
 |-----------|-------|---------|
-| `completion_bonus` | +0.15 × n | Job completed (on-time or late) |
+| `completion_bonus` | +0.20 × n | Job completed (on-time or late) |
 | `utilization_bonus` | +0.05 × ratio | Active machines / total machines |
 | `spool_match_bonus` | +0.02 | Assign with exact material match |
 | `terminal_bonus` | +0.30 × rate | Episode ends — on-time completions / total jobs |
 | `idle_penalty` | -0.01 × n | Per idle machine per step |
 | `preempt_penalty` | -0.03 | Preemption action |
-| `deadline_miss_penalty` | -0.08 × n | Job completed after deadline |
+| `deadline_miss_penalty` | -0.10 × n | Job completed after deadline |
 | `partial_match_penalty` | -0.015 | Assign with partial material family match |
 | `failure_penalty` | -0.02 × n | Machine failure event |
 | `skip_penalty` | -0.005 | Skip action |
@@ -119,8 +119,8 @@ Each machine is generated with unique attributes:
 
 | Attribute | Easy Range | Medium Range | Hard Range |
 |-----------|-----------|-------------|-----------|
-| `speed_modifier` | 0.9–1.1 | 0.7–1.3 | 0.6–1.4 |
-| `max_weight_g` | 80–100g | 60–100g | 50–100g |
+| `speed_modifier` | 0.95–1.05 | 0.8–1.2 | 0.6–1.4 |
+| `max_weight_g` | 90–100g | 65–100g | 50–100g |
 
 - **`speed_modifier`**: scales effective print steps — a 1.2× machine completes a 3-step job in ~2 steps
 - **`max_weight_g`**: limits which jobs can be assigned — a 60g machine cannot print a 75g job

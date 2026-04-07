@@ -182,8 +182,10 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
 
             action_data = json.loads(raw)
             action = Action(**action_data)
-        except Exception:
-            # Fallback to heuristic on any LLM error
+        except Exception as e:
+            # Log the error, then fall back to heuristic
+            import sys
+            print(f"[WARN] LLM call failed: {type(e).__name__}: {e}", file=sys.stderr)
             action = heuristic_action(obs, env.state(), env._step_count)
 
         obs, reward, done, info = env.step(action)
