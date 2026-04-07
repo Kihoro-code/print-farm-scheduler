@@ -80,7 +80,7 @@ docker build -t print-farm-scheduler .
 
 # Run with required environment variables
 docker run -e HF_TOKEN=your_token \
-           -e API_BASE_URL=https://api-inference.huggingface.co/v1 \
+           -e API_BASE_URL=https://router.huggingface.co/v1 \
            -e MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct \
            print-farm-scheduler
 ```
@@ -90,7 +90,7 @@ Or run locally:
 ```bash
 pip install -r requirements.txt
 export HF_TOKEN=your_token
-export API_BASE_URL=https://api-inference.huggingface.co/v1
+export API_BASE_URL=https://router.huggingface.co/v1
 export MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct
 python inference.py
 ```

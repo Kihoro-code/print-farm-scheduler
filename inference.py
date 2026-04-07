@@ -188,6 +188,12 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
             print(f"[WARN] LLM call failed: {type(e).__name__}: {e}", file=sys.stderr)
             action = heuristic_action(obs, env.state(), env._step_count)
 
+        # Validate action — LLM may return legal JSON but illegal game move
+        if not env._is_valid_action(action):
+            import sys
+            print(f"[WARN] LLM returned illegal action: {action.model_dump()}, falling back to heuristic", file=sys.stderr)
+            action = heuristic_action(obs, env.state(), env._step_count)
+
         obs, reward, done, info = env.step(action)
         trajectory.append(
             {
