@@ -140,6 +140,27 @@ reliability = max(0.50, 0.95 - 0.02 × hours_used)
 
 This creates a load-balancing incentive — agents must spread work across machines to avoid wearing down their best printers.
 
+## Benchmark Gap Filled
+
+No existing RL benchmark (OpenAI Gym, DeepMind Control Suite, AgentBench, WebArena, OR-Gym) models multi-machine manufacturing scheduling with all of:
+- Heterogeneous machine capabilities (speed, capacity, material compatibility)
+- Stochastic equipment degradation requiring load-balancing
+- Partial observability of demand (advance bookings visible ≤2 steps ahead)
+- Material family compatibility creating non-trivial assignment constraints
+
+This fills the gap between abstract job-shop scheduling (OR-Gym) and real manufacturing operations research. Any team building LLM-based scheduling agents for factories can immediately use this as a standard evaluation benchmark.
+
+## Why This Challenges Frontier Models
+
+The hard task creates a search space of ~6^22 possible assignment sequences (22 jobs × 6 machines), compounded by:
+- **Material constraints**: only 2 of 6 machines may be compatible with any given job
+- **Temporal coupling**: assigning job A now may prevent job B later (filament depletion)
+- **Stochastic failures**: wear-based degradation means plans become invalid mid-episode
+- **Multi-wave arrivals**: 8 jobs arrive mid-episode, invalidating earlier scheduling decisions
+- **Filament scarcity**: 40–120g per machine vs 10–60g per job = only ~2–3 jobs per machine before refill impossible
+
+A greedy heuristic achieves ~0.35 on the hard task. An optimal scheduler would require lookahead planning across all 30 steps with stochastic uncertainty — well beyond naive LLM prompt-and-respond loops.
+
 ## Files
 
 | File | Description |
@@ -150,3 +171,4 @@ This creates a load-balancing incentive — agents must spread work across machi
 | `openenv.yaml` | OpenEnv spec manifest |
 | `Dockerfile` | Container build |
 | `requirements.txt` | Python dependencies |
+

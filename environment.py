@@ -662,5 +662,7 @@ class PrintFarmEnv:
             "failures_this_step": 0,
             "completions_this_step": 0,
             "deadlines_missed_this_step": 0,
+            "spool_match_this_step": False,
+            "partial_match_this_step": False,
             "total_jobs": n_jobs + n_arrivals,
         }

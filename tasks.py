@@ -143,7 +143,7 @@ TASKS: dict[str, Task] = {
         name="easy",
         difficulty="easy",
         description=(
-            "You manage a small 3D print farm with 2 machines. All jobs use PLA. "
+            "You manage a small 3D print farm with 3 machines. All jobs use PLA. "
             "Assign jobs to idle machines to complete as many as possible before "
             "their deadlines. Jobs are available immediately with generous deadlines. "
             "Focus on keeping machines busy — there are no material conflicts. "
@@ -180,14 +180,14 @@ TASKS: dict[str, Task] = {
             "(PLA, PETG, ABS, Nylon, TPU). Material families: PLA↔PETG (low-temp) "
             "and Nylon↔TPU (specialty) are partially compatible — printable with "
             "+1 step penalty and a 1-step spool change delay. ABS requires exact "
-            "match. Jobs arrive in 3 waves with very tight deadlines. Filament is "
-            "scarce, spool changes are costly, and machines vary in speed "
-            "(speed_modifier) and max build weight (max_weight_g). Machines degrade "
-            "with use — reliability drops as hours_used increases (starts at 95%, "
-            "decreasing ~2% per hour of printing, minimum 50%). You must preempt "
-            "strategically, prioritize the queue, balance load across machines to "
-            "minimize wear, and match materials efficiently to maximize on-time "
-            "completions."
+            "match. 14 jobs start in queue with 8 more arriving in waves with very "
+            "tight deadlines. Filament is scarce (40–120g per machine), spool changes "
+            "are costly, and machines vary in speed (speed_modifier 0.6–1.4×) and "
+            "max build weight (max_weight_g 50–100g). Machines degrade with use — "
+            "reliability drops as hours_used increases (starts at 95%, decreasing "
+            "~2% per hour of printing, minimum 50%). You must preempt strategically, "
+            "prioritize the queue, balance load across machines to minimize wear, "
+            "and match materials efficiently to maximize on-time completions."
         ),
         grader=grade_hard,
         max_steps=30,
