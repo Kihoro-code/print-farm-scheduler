@@ -4,10 +4,17 @@ inference.py — OpenEnv hackathon baseline inference script.
 Must be in the project root. Reads credentials from environment variables.
 Emits structured stdout logs in [START]/[STEP]/[END] format.
 Must complete all 3 tasks in under 20 minutes on vcpu=2, memory=8gb.
+
+STDOUT FORMAT (official spec):
+    [START] task=<task_name> env=<benchmark> model=<model_name>
+    [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+    [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 """
 
 import os
 import json
+import sys
+from typing import List, Optional
 
 from openai import OpenAI
 
@@ -15,12 +22,39 @@ from environment import PrintFarmEnv, Action
 from tasks import TASKS
 
 
-# ── Required env vars — do NOT rename these ──────────────────────────────────
+# ── Required env vars ────────────────────────────────────────────────────────
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+MODEL_NAME = os.getenv("MODEL_NAME") or "meta-llama/Llama-3.1-8B-Instruct"
+BENCHMARK = "print-farm-scheduler"
+
 client = OpenAI(
-    api_key=os.environ["HF_TOKEN"],
-    base_url=os.environ["API_BASE_URL"],
+    api_key=API_KEY,
+    base_url=API_BASE_URL,
 )
-MODEL_NAME = os.environ["MODEL_NAME"]
+
+
+# ── Logging helpers (official format) ────────────────────────────────────────
+
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
+    )
 
 
 # ── LLM System Prompt ────────────────────────────────────────────────────────
@@ -63,7 +97,6 @@ def heuristic_action(obs, state: dict, step: int) -> Action:
     machines = state["machines"]
 
     # 1. If queue[0] is compatible with any idle machine → assign
-    #    Prefer exact material match and faster machines
     if queue:
         first_job = queue[0]
         best_machine = None
@@ -71,20 +104,18 @@ def heuristic_action(obs, state: dict, step: int) -> Action:
         for machine in machines:
             if machine["status"] != "idle":
                 continue
-            # Check material compatibility
             loaded = machine["material_loaded"]
             required = first_job["material"]
             if loaded == required:
-                compat_score = 2.0  # Exact match preferred
+                compat_score = 2.0
             elif _same_family(loaded, required):
-                compat_score = 1.0  # Partial match acceptable
+                compat_score = 1.0
             else:
-                continue  # Incompatible
+                continue
             if machine["filament_remaining_g"] < first_job["weight_g"]:
                 continue
             if first_job["weight_g"] > machine.get("max_weight_g", 100.0):
                 continue
-            # Prefer faster machines (higher speed_modifier)
             speed = machine.get("speed_modifier", 1.0)
             score = compat_score + speed * 0.5
             if score > best_score:
@@ -97,8 +128,7 @@ def heuristic_action(obs, state: dict, step: int) -> Action:
     if queue:
         sorted_queue = sorted(queue, key=lambda j: j["deadline_step"])
         urgent = [
-            j
-            for j in sorted_queue
+            j for j in sorted_queue
             if (j["deadline_step"] - step) <= j["print_steps"] + 3
         ]
         if urgent:
@@ -141,6 +171,18 @@ def _same_family(mat_a: str, mat_b: str) -> bool:
     return families.get(mat_a) == families.get(mat_b)
 
 
+def _action_to_str(action: Action) -> str:
+    """Format action as a human-readable string for [STEP] log."""
+    if action.type == "assign":
+        return f"assign(machine_id={action.machine_id})"
+    elif action.type == "preempt":
+        return f"preempt(machine_id={action.machine_id})"
+    elif action.type == "prioritize":
+        return f"prioritize(job_id={action.job_id})"
+    else:
+        return "skip()"
+
+
 # ── Task Runner ──────────────────────────────────────────────────────────────
 
 
@@ -151,11 +193,12 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
     obs = env.reset()
     trajectory = []
     done = False
+    rewards: List[float] = []
 
-    # [START] log — exact field names required
-    print(f'[START] {json.dumps({"task": task_name, "episode": episode})}')
+    # [START] log — official format
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
-    step_n = 0
+    step_n = 1
     while not done:
         # Call LLM for action
         try:
@@ -183,18 +226,17 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
             action_data = json.loads(raw)
             action = Action(**action_data)
         except Exception as e:
-            # Log the error, then fall back to heuristic
-            import sys
             print(f"[WARN] LLM call failed: {type(e).__name__}: {e}", file=sys.stderr)
             action = heuristic_action(obs, env.state(), env._step_count)
 
         # Validate action — LLM may return legal JSON but illegal game move
         if not env._is_valid_action(action):
-            import sys
             print(f"[WARN] LLM returned illegal action: {action.model_dump()}, falling back to heuristic", file=sys.stderr)
             action = heuristic_action(obs, env.state(), env._step_count)
 
         obs, reward, done, info = env.step(action)
+        rewards.append(reward.value)
+
         trajectory.append(
             {
                 "obs": obs.model_dump(),
@@ -204,16 +246,21 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
             }
         )
 
-        # [STEP] log — exact field names and ordering required
-        print(
-            f'[STEP] {json.dumps({"step": step_n, "action": action.model_dump(), "reward": reward.value, "done": done})}'
+        # [STEP] log — official format
+        log_step(
+            step=step_n,
+            action=_action_to_str(action),
+            reward=reward.value,
+            done=done,
+            error=None,
         )
         step_n += 1
 
     score = task.grader(trajectory)
+    success = score >= 0.1
 
-    # [END] log — exact field names required
-    print(f'[END] {json.dumps({"task": task_name, "score": score})}')
+    # [END] log — official format
+    log_end(success=success, steps=step_n - 1, score=score, rewards=rewards)
     return score
 
 
