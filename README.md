@@ -159,7 +159,7 @@ The hard task creates a search space of ~6^22 possible assignment sequences (22 
 - **Multi-wave arrivals**: 8 jobs arrive mid-episode, invalidating earlier scheduling decisions
 - **Filament scarcity**: 40–120g per machine vs 10–60g per job = only ~2–3 jobs per machine before refill impossible
 
-A greedy heuristic achieves ~0.35 on the hard task. An optimal scheduler would require lookahead planning across all 30 steps with stochastic uncertainty — well beyond naive LLM prompt-and-respond loops.
+A greedy heuristic achieves ~0.03 on the hard task. An optimal scheduler would require lookahead planning across all 30 steps with stochastic uncertainty — well beyond naive LLM prompt-and-respond loops.
 
 ## Files
 
