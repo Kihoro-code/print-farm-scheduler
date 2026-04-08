@@ -11,7 +11,14 @@ Endpoints:
 """
 
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Ensure the project root is on the import path
+ROOT = str(Path(__file__).resolve().parent.parent)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -126,3 +133,20 @@ def get_state():
         if task_name in _envs:
             return _envs[task_name].state()
     raise HTTPException(status_code=400, detail="No environment active. Call /reset first.")
+
+
+# ── Entry Point ──────────────────────────────────────────────────────────────
+
+def main():
+    """Start the uvicorn server. Used by [project.scripts] entry point."""
+    import uvicorn
+    uvicorn.run(
+        "server.app:app",
+        host="0.0.0.0",
+        port=7860,
+        log_level="info",
+    )
+
+
+if __name__ == "__main__":
+    main()
