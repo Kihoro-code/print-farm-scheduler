@@ -8,7 +8,7 @@ Must complete all 3 tasks in under 20 minutes on vcpu=2, memory=8gb.
 STDOUT FORMAT (official spec):
     [START] task=<task_name> env=<benchmark> model=<model_name>
     [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-    [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
+    [END]   success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
 """
 
 import os
@@ -23,13 +23,16 @@ from tasks import TASKS
 
 
 # ── Required env vars ────────────────────────────────────────────────────────
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
-MODEL_NAME = os.getenv("MODEL_NAME") or "meta-llama/Llama-3.1-8B-Instruct"
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
 BENCHMARK = "print-farm-scheduler"
 
 client = OpenAI(
-    api_key=API_KEY,
+    api_key=HF_TOKEN,
     base_url=API_BASE_URL,
 )
 
@@ -49,10 +52,10 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
         flush=True,
     )
 
@@ -260,7 +263,7 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
     success = score >= 0.1
 
     # [END] log — official format
-    log_end(success=success, steps=step_n - 1, score=score, rewards=rewards)
+    log_end(success=success, steps=step_n - 1, rewards=rewards)
     return score
 
 
