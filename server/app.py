@@ -1,152 +1,86 @@
 """
-server.py — FastAPI server exposing the Print Farm Scheduler environment
-for the OpenEnv hackathon automated validator.
+FastAPI application for the Print Farm Scheduler Environment.
+
+This module creates an HTTP server that exposes the PrintFarmEnvironment
+over HTTP and WebSocket endpoints, compatible with EnvClient.
 
 Endpoints:
-    POST /reset   — reset environment, returns Observation
-    POST /step    — step with an action, returns (Observation, Reward, done, info)
-    GET  /state   — returns current state dict
-    GET  /health  — liveness probe
-    GET  /        — basic info page
+    - POST /reset: Reset the environment
+    - POST /step: Execute an action
+    - GET /state: Get current environment state
+    - GET /schema: Get action/observation schemas
+    - WS /ws: WebSocket endpoint for persistent sessions
+
+Usage:
+    # Development (with auto-reload):
+    uvicorn server.app:app --reload --host 0.0.0.0 --port 7860
+
+    # Production:
+    uvicorn server.app:app --host 0.0.0.0 --port 7860
+
+    # Or run directly:
+    uv run --project . server
 """
 
 import os
 import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
-# Ensure the project root is on the import path
-ROOT = str(Path(__file__).resolve().parent.parent)
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+# Ensure imports work in both Docker and local contexts
+SERVER_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SERVER_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+try:
+    from openenv.core.env_server.http_server import create_app
+except ImportError as e:
+    raise ImportError(
+        "openenv-core is required. Install with: pip install openenv-core[core]"
+    ) from e
 
-from environment import PrintFarmEnv, Observation, Action, Reward
-from tasks import TASKS
-
-
-# ── Request/Response Models ──────────────────────────────────────────────────
-
-class ResetRequest(BaseModel):
-    task: str = "easy"
-    seed: int = 42
-
-class StepRequest(BaseModel):
-    action: Action
-
-class StepResponse(BaseModel):
-    observation: Observation
-    reward: Reward
-    done: bool
-    info: dict
-
-class ResetResponse(BaseModel):
-    observation: Observation
+try:
+    from ..models import PrintFarmAction, PrintFarmObservation
+    from .print_farm_environment import PrintFarmEnvironment
+except ImportError:
+    from models import PrintFarmAction, PrintFarmObservation
+    from server.print_farm_environment import PrintFarmEnvironment
 
 
-# ── Global Environment State ─────────────────────────────────────────────────
-
-_envs: dict[str, PrintFarmEnv] = {}
-
-
-# ── App Lifecycle ────────────────────────────────────────────────────────────
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Pre-initialize environments for all tasks
-    for task_name, task in TASKS.items():
-        _envs[task_name] = PrintFarmEnv(
-            seed=task.seed, difficulty=task_name, max_steps=task.max_steps
-        )
-        _envs[task_name].reset()
-    yield
-    _envs.clear()
-
-
-app = FastAPI(
-    title="Print Farm Scheduler — OpenEnv",
-    description="3D Print Farm Logistics Scheduling RL Environment",
-    version="2.1.1",
-    lifespan=lifespan,
+# Create the app using the OpenEnv factory
+app = create_app(
+    PrintFarmEnvironment,
+    PrintFarmAction,
+    PrintFarmObservation,
+    env_name="print_farm_scheduler",
+    max_concurrent_envs=1,
 )
 
 
-# ── Endpoints ────────────────────────────────────────────────────────────────
+def main(host: str = "0.0.0.0", port: int = 7860):
+    """
+    Entry point for direct execution via uv run or python -m.
 
-@app.get("/")
-def root():
-    return {
-        "name": "print-farm-scheduler",
-        "version": "2.1.1",
-        "tasks": list(TASKS.keys()),
-        "status": "running",
-    }
+    This function enables running the server without Docker:
+        uv run --project . server
+        python -m server.app
 
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/reset", response_model=ResetResponse)
-def reset(req: ResetRequest = ResetRequest()):
-    task_name = req.task
-    if task_name not in TASKS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown task '{task_name}'. Available: {list(TASKS.keys())}",
-        )
-    task = TASKS[task_name]
-    env = PrintFarmEnv(
-        seed=req.seed, difficulty=task_name, max_steps=task.max_steps
-    )
-    obs = env.reset()
-    _envs[task_name] = env
-    return ResetResponse(observation=obs)
-
-
-@app.post("/step", response_model=StepResponse)
-def step(req: StepRequest):
-    # Find the active environment (use the most recently reset one)
-    env = None
-    for task_name in ["hard", "medium", "easy"]:
-        if task_name in _envs:
-            env = _envs[task_name]
-            break
-
-    if env is None:
-        raise HTTPException(status_code=400, detail="No environment active. Call /reset first.")
-
-    try:
-        obs, reward, done, info = env.step(req.action)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return StepResponse(observation=obs, reward=reward, done=done, info=info)
-
-
-@app.get("/state")
-def get_state():
-    for task_name in ["hard", "medium", "easy"]:
-        if task_name in _envs:
-            return _envs[task_name].state()
-    raise HTTPException(status_code=400, detail="No environment active. Call /reset first.")
-
-
-# ── Entry Point ──────────────────────────────────────────────────────────────
-
-def main():
-    """Start the uvicorn server. Used by [project.scripts] entry point."""
+    Args:
+        host: Host address to bind to (default: "0.0.0.0")
+        port: Port number to listen on (default: 7860)
+    """
     import uvicorn
-    uvicorn.run(
-        "server.app:app",
-        host="0.0.0.0",
-        port=7860,
-        log_level="info",
-    )
+
+    port = int(os.getenv("PORT", str(port)))
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=7860)
+    args = parser.parse_args()
+    main(port=args.port)

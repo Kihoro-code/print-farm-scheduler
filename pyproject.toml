@@ -1,22 +1,36 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "print-farm-scheduler"
-version = "2.1.1"
-description = "Enterprise 3D Print Farm Logistics Scheduler — OpenEnv RL environment"
+name = "openenv-print-farm-scheduler"
+version = "0.2.0"
+description = "Enterprise 3D Print Farm Logistics Scheduler environment for OpenEnv"
 requires-python = ">=3.10"
 dependencies = [
-    "pydantic>=2.0",
-    "openai>=1.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "openenv-core>=0.2.0",
+    # Core OpenEnv runtime (provides FastAPI server + HTTP client types)
+    "openenv-core[core]>=0.2.2",
+    # Environment-specific dependencies
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [project.scripts]
-server = "server.app:main"
+# Server entry point - enables running via: uv run --project . server
+server = "print_farm_scheduler.server.app:main"
 
-[project.optional-dependencies]
-dev = ["pytest", "httpx"]
+[tool.setuptools]
+include-package-data = true
+packages = ["print_farm_scheduler", "print_farm_scheduler.server"]
+package-dir = { "print_farm_scheduler" = ".", "print_farm_scheduler.server" = "server" }
+
+[tool.setuptools.package-data]
+print_farm_scheduler = ["**/*.yaml", "**/*.yml", "**/*.md"]

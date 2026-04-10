@@ -1,25 +1,6 @@
-name: print-farm-scheduler
-version: "2.1.0"
-description: "Enterprise 3D Print Farm Logistics Scheduler — assign, preempt, and prioritize print jobs across heterogeneous machines under material family compatibility, spool-change delays, filament capacity, deadline pressure, build-weight limits, and wear-based reliability degradation."
-tags:
-  - openenv
-  - scheduling
-  - logistics
-  - manufacturing
-  - combinatorial-optimization
-observation_schema: environment.Observation
-action_schema: environment.Action
-reward_schema: environment.Reward
-tasks:
-  - name: easy
-    difficulty: easy
-    max_steps: 30
-    description: "3 machines (speed 0.95–1.05×), 1 material (PLA), 7 jobs, generous deadlines, wear degradation active"
-  - name: medium
-    difficulty: medium
-    max_steps: 30
-    description: "4 machines (speed 0.8–1.2×, varied max weight), 3 materials (PLA/PETG/ABS) with family compatibility, 8+3 jobs with rolling arrivals, spool change delays"
-  - name: hard
-    difficulty: hard
-    max_steps: 30
-    description: "6 machines (speed 0.6–1.4×, varied max weight), 5 materials with 2 compatibility families, 14+8 jobs in wave arrivals, tight deadlines, wear degradation, spool change delays, filament scarcity"
+spec_version: 1
+name: print_farm_scheduler
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860

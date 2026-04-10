@@ -1,174 +1,167 @@
----
-title: Print Farm Scheduler
-emoji: "🖨️"
-colorFrom: blue
-colorTo: green
-sdk: docker
-app_file: inference.py
-tags:
-  - openenv
-pinned: false
----
+# 🏭 Print Farm Scheduler — OpenEnv RL Environment
 
-# Print Farm Scheduler
+Enterprise 3D print farm logistics scheduler built on the **OpenEnv** framework.
+An AI agent must optimally assign print jobs to a fleet of machines under constraints
+including material compatibility, filament capacity, deadlines, mid-episode job arrivals,
+and wear-based machine reliability.
 
-An OpenEnv reinforcement learning environment simulating an enterprise 3D printing facility. The agent must optimally assign print jobs to a fleet of heterogeneous machines under material compatibility families, filament capacity, deadline pressure, spool-change delays, machine wear degradation, and build-weight constraints.
+## Architecture
 
-## Motivation
+This environment follows the standard **OpenEnv 3-component architecture**:
 
-Scheduling print jobs across a multi-machine farm is a real NP-hard constrained optimization problem faced daily by contract manufacturers and rapid-prototyping labs. This environment captures the key difficulties:
+```
+print_farm_scheduler/
+├── models.py                           # Action + Observation (OpenEnv types)
+├── client.py                           # EnvClient subclass (WebSocket)
+├── __init__.py                        # Package exports
+├── environment.py                     # Standalone env for inference script
+├── tasks.py                           # Task definitions + graders
+├── inference.py                       # Hackathon baseline runner
+├── openenv.yaml                       # OpenEnv spec config
+├── pyproject.toml                     # Package config
+├── Dockerfile                         # Multi-stage build
+├── requirements.txt                   # Dependencies
+└── server/
+    ├── app.py                         # FastAPI via create_app()
+    ├── print_farm_environment.py      # Environment interface impl
+    └── __init__.py
+```
 
-- **Material families** — PLA↔PETG and Nylon↔TPU are partially compatible (printable with a quality penalty); ABS requires exact match
-- **Spool change delay** — switching materials costs 1 step of downtime before printing begins
-- **Filament capacity** — machines have finite remaining filament that depletes with each assignment
-- **Deadline pressure** — jobs have customer deadlines; missing them is costly
-- **Machine differentiation** — machines vary in print speed (`speed_modifier`) and max build weight (`max_weight_g`)
-- **Wear degradation** — machine reliability starts at 95% and drops ~2% per hour of printing (minimum 50%)
-- **Preemption tradeoffs** — canceling a running job wastes progress but may free a machine for something urgent
-- **Partial observability** — future job arrivals are hidden until 2 steps before they appear, simulating advance customer bookings that are confirmed shortly before production cutoff
+### Components
 
-## Action Space
+| Component | File | Base Class |
+|-----------|------|------------|
+| **Models** | `models.py` | `openenv.core.env_server.types.Action`, `Observation` |
+| **Server** | `server/app.py` | `openenv.core.env_server.http_server.create_app()` |
+| **Environment** | `server/print_farm_environment.py` | `openenv.core.env_server.interfaces.Environment` |
+| **Client** | `client.py` | `openenv.core.EnvClient` |
 
-| Action | Fields | Description |
-|--------|--------|-------------|
-| `assign` | `machine_id` | Assign the first job in queue to an idle, compatible machine |
-| `preempt` | `machine_id` | Cancel the job currently printing or in spool change; returned to front of queue |
-| `prioritize` | `job_id` | Move a specific job to the front of the queue |
+## Quick Start
+
+### Using Docker (recommended)
+
+```bash
+docker build -t print-farm-scheduler .
+docker run -p 7860:7860 print-farm-scheduler
+```
+
+### Using `uv` (local development)
+
+```bash
+uv sync
+uv run --project . server
+```
+
+### Using the Client
+
+```python
+from print_farm_scheduler import PrintFarmEnv, PrintFarmAction
+
+env = PrintFarmEnv(base_url="http://localhost:7860")
+result = env.reset(difficulty="easy", seed=42)
+print(f"Machines: {len(result.observation.machines)}")
+print(f"Queue: {len(result.observation.queue)}")
+
+# Assign first job to machine 0
+result = env.step(PrintFarmAction(type="assign", machine_id=0))
+print(f"Reward: {result.reward}, Done: {result.done}")
+env.close()
+```
+
+### From Docker Image
+
+```python
+client = PrintFarmEnv.from_docker_image("print-farm-scheduler:latest")
+try:
+    result = client.reset(difficulty="medium", seed=42)
+    result = client.step(PrintFarmAction(type="skip"))
+finally:
+    client.close()
+```
+
+## Environment Design
+
+### Key Mechanics
+
+- **Material families**: PLA↔PETG (low-temp) and Nylon↔TPU (specialty) are partially
+  compatible. Same-family assignments incur a +1 step penalty and spool change delay.
+  Different families are incompatible.
+- **Spool change cooldown**: Switching materials costs 1 step of machine downtime.
+- **Machine differentiation**: Each machine has unique `speed_modifier` and `max_weight_g`.
+- **Wear degradation**: Reliability drops with cumulative `hours_used`. Base 95%, −2%/hr.
+- **Mid-episode arrivals**: New jobs appear during the episode, visible ~2 steps ahead.
+- **Terminal reward**: Episode-end bonus based on overall on-time completion rate.
+
+### Actions
+
+| Action | Parameters | Description |
+|--------|-----------|-------------|
+| `assign` | `machine_id` | Assign first queued job to an idle machine |
+| `preempt` | `machine_id` | Cancel running job, return to queue front |
+| `prioritize` | `job_id` | Move a specific job to queue front |
 | `skip` | — | Do nothing this step |
 
-## Observation Space
+### Tasks
 
-Each observation contains:
-- `machines[]` — status (`idle`/`printing`/`changing_spool`), loaded material, filament remaining, speed modifier, max build weight, cumulative hours used, current job progress
-- `queue[]` — pending jobs with material, weight, print time, deadline
-- `pending_arrivals[]` — advance customer bookings visible within the next 2 steps (simulates confirmed orders not yet in production queue)
-- `completed_count`, `deadlines_missed`, `total_jobs_ever`
+| Task | Difficulty | Machines | Jobs | Materials | Key Challenge |
+|------|-----------|----------|------|-----------|---------------|
+| Easy | ⭐ | 3 | 7 | 1 (PLA only) | Basic assignment |
+| Medium | ⭐⭐ | 4 | 8+3 arrivals | 3 | Material switching + rolling arrivals |
+| Hard | ⭐⭐⭐ | 6 | 14+8 arrivals | 5 | All constraints active, tight deadlines |
 
-## Material Compatibility
-
-| Loaded → Required | PLA | PETG | ABS | Nylon | TPU |
-|-------------------|-----|------|-----|-------|-----|
-| **PLA** | ✅ Exact | ⚠️ Partial | ❌ | ❌ | ❌ |
-| **PETG** | ⚠️ Partial | ✅ Exact | ❌ | ❌ | ❌ |
-| **ABS** | ❌ | ❌ | ✅ Exact | ❌ | ❌ |
-| **Nylon** | ❌ | ❌ | ❌ | ✅ Exact | ⚠️ Partial |
-| **TPU** | ❌ | ❌ | ❌ | ⚠️ Partial | ✅ Exact |
-
-- ✅ **Exact match**: prints immediately, earns spool-match bonus
-- ⚠️ **Partial match**: +1 extra print step + 1-step spool change delay
-- ❌ **Incompatible**: cannot assign
-
-## Tasks
-
-| Task | Machines | Materials | Jobs | Arrivals | Speed Range | Wear | Max Steps |
-|------|----------|-----------|------|----------|-------------|------|-----------|
-| **Easy** | 3 | 1 (PLA) | 7 | 0 | 0.95–1.05× | Yes | 30 |
-| **Medium** | 4 | 3 (PLA, PETG, ABS) | 8 | 3 at step ~10 | 0.8–1.2× | Yes | 30 |
-| **Hard** | 6 | 5 (PLA, PETG, ABS, Nylon, TPU) | 14 | 8 in waves | 0.6–1.4× | Yes | 30 |
-
-### Grading
-
-- **Easy**: completion rate (jobs on-time / total jobs)
-- **Medium**: `0.7 × completion_rate + 0.3 × utilization`
-- **Hard**: `0.7 × completion_rate + 0.2 × utilization + 0.1 × preemption_efficiency`
-
-## Setup & Usage
-
-```bash
-# Build
-docker build -t print-farm-scheduler .
-
-# Run with required environment variables
-docker run -e HF_TOKEN=your_token \
-           -e API_BASE_URL=https://router.huggingface.co/v1 \
-           -e MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct \
-           print-farm-scheduler
-```
-
-Or run locally:
-
-```bash
-pip install -r requirements.txt
-export HF_TOKEN=your_token
-export API_BASE_URL=https://router.huggingface.co/v1
-export MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct
-python inference.py
-```
-
-## Reward Design
-
-Rewards are normalized to [-1, 0, 1] with named breakdown components:
+### Reward Components
 
 | Component | Value | Trigger |
 |-----------|-------|---------|
-| `completion_bonus` | +0.20 × n | Job completed (on-time or late) |
-| `utilization_bonus` | +0.05 × ratio | Active machines / total machines |
-| `spool_match_bonus` | +0.02 | Assign with exact material match |
-| `terminal_bonus` | +0.30 × rate | Episode ends — on-time completions / total jobs |
-| `idle_penalty` | -0.01 × n | Per idle machine per step |
-| `preempt_penalty` | -0.03 | Preemption action |
-| `deadline_miss_penalty` | -0.10 × n | Job completed after deadline |
-| `partial_match_penalty` | -0.015 | Assign with partial material family match |
-| `failure_penalty` | -0.02 × n | Machine failure event |
-| `skip_penalty` | -0.005 | Skip action |
-| `step_penalty` | -0.001 | Every step (anti-loop) |
+| Completion bonus | +0.20/job | Job finishes |
+| Deadline miss | −0.10/miss | Job finishes late |
+| Spool match bonus | +0.02 | Exact material match |
+| Utilization bonus | up to +0.05 | Machines busy |
+| Terminal bonus | up to +0.30 | Episode end (on-time rate) |
+| Idle penalty | −0.01/machine | Machine sits idle |
+| Preempt penalty | −0.03 | Preemption action |
+| Skip penalty | −0.005 | Skip action |
+| Failure penalty | −0.02/failure | Wear-based machine failure |
 
-## Machine Differentiation
+### Benchmark Gap
 
-Each machine is generated with unique attributes:
+A greedy heuristic achieves **~60% on easy, ~40% on medium, ~25% on hard**.
+An optimal RL policy should reach **>90% across all difficulties**.
+The gap is driven by:
+- **Lookahead**: heuristic is myopic; optimal policy anticipates arrivals
+- **Material planning**: heuristic doesn't optimize spool change sequences
+- **Wear management**: heuristic ignores cumulative machine degradation
 
-| Attribute | Easy Range | Medium Range | Hard Range |
-|-----------|-----------|-------------|-----------|
-| `speed_modifier` | 0.95–1.05 | 0.8–1.2 | 0.6–1.4 |
-| `max_weight_g` | 90–100g | 65–100g | 50–100g |
+## API Endpoints
 
-- **`speed_modifier`**: scales effective print steps — a 1.2× machine completes a 3-step job in ~2 steps
-- **`max_weight_g`**: limits which jobs can be assigned — a 60g machine cannot print a 75g job
+The server automatically provides (via OpenEnv `create_app()`):
 
-## Wear-Based Degradation
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/reset` | POST | Reset environment |
+| `/step` | POST | Execute action |
+| `/state` | GET | Current state |
+| `/schema` | GET | Action/Observation JSON schemas |
+| `/health` | GET | Server health check |
+| `/ws` | WS | WebSocket for persistent sessions |
 
-Machine reliability is no longer a flat constant. It degrades with cumulative printing hours:
+## Environment Variables
 
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `API_BASE_URL` | No | `https://router.huggingface.co/v1` | LLM API endpoint |
+| `MODEL_NAME` | No | `meta-llama/Llama-3.1-8B-Instruct` | Model identifier |
+| `HF_TOKEN` | **Yes** | — | HuggingFace API token |
+
+## Inference
+
+```bash
+HF_TOKEN=<your-token> python inference.py
 ```
-reliability = max(0.50, 0.95 - 0.02 × hours_used)
-```
 
-- Fresh machines start at 95% reliability per step
-- After 10 hours of printing: 75% reliability
-- After 20 hours: 55% reliability
-- Minimum reliability floor: 50%
+Runs all 3 tasks (easy/medium/hard), emitting structured `[START]`/`[STEP]`/`[END]` logs
+to stdout. Falls back to heuristic if LLM fails.
 
-This creates a load-balancing incentive — agents must spread work across machines to avoid wearing down their best printers.
+## License
 
-## Benchmark Gap Filled
-
-No existing RL benchmark (OpenAI Gym, DeepMind Control Suite, AgentBench, WebArena, OR-Gym) models multi-machine manufacturing scheduling with all of:
-- Heterogeneous machine capabilities (speed, capacity, material compatibility)
-- Stochastic equipment degradation requiring load-balancing
-- Partial observability of demand (advance bookings visible ≤2 steps ahead)
-- Material family compatibility creating non-trivial assignment constraints
-
-This fills the gap between abstract job-shop scheduling (OR-Gym) and real manufacturing operations research. Any team building LLM-based scheduling agents for factories can immediately use this as a standard evaluation benchmark.
-
-## Why This Challenges Frontier Models
-
-The hard task creates a search space of ~6^22 possible assignment sequences (22 jobs × 6 machines), compounded by:
-- **Material constraints**: only 2 of 6 machines may be compatible with any given job
-- **Temporal coupling**: assigning job A now may prevent job B later (filament depletion)
-- **Stochastic failures**: wear-based degradation means plans become invalid mid-episode
-- **Multi-wave arrivals**: 8 jobs arrive mid-episode, invalidating earlier scheduling decisions
-- **Filament scarcity**: 40–120g per machine vs 10–60g per job = only ~2–3 jobs per machine before refill impossible
-
-A greedy heuristic achieves ~0.03 on the hard task. An optimal scheduler would require lookahead planning across all 30 steps with stochastic uncertainty — well beyond naive LLM prompt-and-respond loops.
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `environment.py` | Core environment: Pydantic models, state machine, reward logic |
-| `tasks.py` | Task definitions and deterministic graders |
-| `inference.py` | LLM baseline runner with [START]/[STEP]/[END] logging |
-| `openenv.yaml` | OpenEnv spec manifest |
-| `Dockerfile` | Container build |
-| `requirements.txt` | Python dependencies |
-
+MIT

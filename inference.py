@@ -18,6 +18,7 @@ from typing import List, Optional
 
 from openai import OpenAI
 
+# Import environment directly (inference.py runs standalone)
 from environment import PrintFarmEnv, Action
 from tasks import TASKS
 
