@@ -1,3 +1,13 @@
+---
+title: Print Farm Scheduler
+emoji: 🏭
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_file: server/app.py
+pinned: false
+---
+
 # 🏭 Print Farm Scheduler — OpenEnv RL Environment
 
 Enterprise 3D print farm logistics scheduler built on the **OpenEnv** framework.
