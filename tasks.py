@@ -12,6 +12,14 @@ class Task:
     seed: int = 42
 
 
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+
+def _clamp_score(score: float) -> float:
+    """Clamp score to strictly between 0 and 1 (validator rejects 0.0 and 1.0)."""
+    return max(0.001, min(0.999, score))
+
+
 # ── Graders ─────────────────────────────────────────────────────────────────
 
 
@@ -23,8 +31,8 @@ def grade_easy(trajectory: list[dict]) -> float:
     completions = _count_completions(trajectory)
     total = _total_jobs(trajectory)
     if total == 0:
-        return 0.0
-    return round(completions / total, 4)
+        return 0.001
+    return _clamp_score(round(completions / total, 4))
 
 
 def grade_medium(trajectory: list[dict]) -> float:
@@ -37,11 +45,11 @@ def grade_medium(trajectory: list[dict]) -> float:
     utilization = _avg_utilization(trajectory)
 
     if total == 0:
-        return 0.0
+        return 0.001
 
     completion_rate = completions / total
     score = 0.7 * completion_rate + 0.3 * utilization
-    return round(score, 4)
+    return _clamp_score(round(score, 4))
 
 
 def grade_hard(trajectory: list[dict]) -> float:
@@ -55,11 +63,11 @@ def grade_hard(trajectory: list[dict]) -> float:
     preemption_efficiency = _preemption_efficiency(trajectory)
 
     if total == 0:
-        return 0.0
+        return 0.001
 
     completion_rate = completions / total
     score = 0.7 * completion_rate + 0.2 * utilization + 0.1 * preemption_efficiency
-    return round(score, 4)
+    return _clamp_score(round(score, 4))
 
 
 # ── Grader Helpers ──────────────────────────────────────────────────────────
