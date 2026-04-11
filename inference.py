@@ -38,6 +38,13 @@ client = OpenAI(
 )
 
 
+# ── Score / reward helpers ───────────────────────────────────────────────────
+
+def _clamp_reward(r: float) -> float:
+    """Clamp reward to strictly (0, 1) — validator rejects 0.0 and 1.0."""
+    return max(0.001, min(0.999, (r + 1.0) / 2.0))
+
+
 # ── Logging helpers (official format) ────────────────────────────────────────
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -47,14 +54,16 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val = error if error else "null"
     done_val = str(done).lower()
+    clamped = _clamp_reward(reward)
     print(
-        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        f"[STEP] step={step} action={action} reward={clamped:.2f} done={done_val} error={error_val}",
         flush=True,
     )
 
 
 def log_end(success: bool, steps: int, rewards: List[float]) -> None:
-    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    clamped = [_clamp_reward(r) for r in rewards]
+    rewards_str = ",".join(f"{r:.2f}" for r in clamped)
     print(
         f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
         flush=True,
