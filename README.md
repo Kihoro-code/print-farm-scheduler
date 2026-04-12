@@ -5,6 +5,8 @@ colorFrom: blue
 colorTo: purple
 sdk: docker
 app_file: server/app.py
+app_port: 7860
+base_path: /web
 pinned: false
 tags:
   - openenv
@@ -64,6 +66,12 @@ uv sync
 uv run --project . server
 ```
 
+The deployed Space also exposes:
+
+- `/web` for the built-in OpenEnv web interface
+- `/docs` for the OpenAPI surface
+- `/health` for container health checks
+
 ### Using the Client
 
 ```python
@@ -77,6 +85,7 @@ print(f"Queue: {len(result.observation.queue)}")
 # Assign first job to machine 0
 result = env.step(PrintFarmAction(type="assign", machine_id=0))
 print(f"Reward: {result.reward}, Done: {result.done}")
+print(result.observation.reward_info)
 env.close()
 ```
 
@@ -103,6 +112,33 @@ finally:
 - **Wear degradation**: Reliability drops with cumulative `hours_used`. Base 95%, −2%/hr.
 - **Mid-episode arrivals**: New jobs appear during the episode, visible ~2 steps ahead.
 - **Terminal reward**: Episode-end bonus based on overall on-time completion rate.
+- **Shared simulator core**: Both `environment.py` and `server/print_farm_environment.py`
+  now use the same simulation engine, so inference and server behavior stay aligned.
+
+### Curriculum Controls
+
+`reset()` now accepts optional curriculum-style overrides in addition to `difficulty`,
+`seed`, and `max_steps`. Useful knobs include:
+
+- `n_machines`, `n_jobs`, `n_arrivals`, `n_materials`
+- `deadline_tightness` to make deadlines looser or harsher
+- `filament_scale` to simulate scarcity or abundance
+- `speed_scale` and `weight_cap_scale` to widen machine diversity
+- `arrival_shift`, `visible_ahead_steps`, `degradation_scale`, `min_reliability`
+
+These overrides are surfaced back in `observation.metadata["curriculum"]`.
+
+### Observation Metadata
+
+Each observation now includes richer `metadata` with:
+
+- current and average utilization
+- on-time completion rate
+- urgent and likely-late queue jobs
+- material pressure across the queue
+- score estimates for `easy`, `medium`, and `hard`
+
+Server observations also include `reward_info` and `rubric_score` for training/debugging.
 
 ### Actions
 

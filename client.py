@@ -12,9 +12,21 @@ from openenv.core.env_server.types import State
 
 # Support both in-repo and standalone imports
 try:
-    from .models import PrintFarmAction, PrintFarmObservation, MachineSnapshot, JobSnapshot
+    from .models import (
+        JobSnapshot,
+        MachineSnapshot,
+        PrintFarmAction,
+        PrintFarmObservation,
+        RewardBreakdown,
+    )
 except ImportError:
-    from models import PrintFarmAction, PrintFarmObservation, MachineSnapshot, JobSnapshot
+    from models import (
+        JobSnapshot,
+        MachineSnapshot,
+        PrintFarmAction,
+        PrintFarmObservation,
+        RewardBreakdown,
+    )
 
 
 class PrintFarmEnv(EnvClient[PrintFarmAction, PrintFarmObservation, State]):
@@ -87,6 +99,7 @@ class PrintFarmEnv(EnvClient[PrintFarmAction, PrintFarmObservation, State]):
             JobSnapshot(**j)
             for j in obs_data.get("pending_arrivals", [])
         ]
+        reward_info = obs_data.get("reward_info")
 
         observation = PrintFarmObservation(
             step=obs_data.get("step", 0),
@@ -99,6 +112,8 @@ class PrintFarmEnv(EnvClient[PrintFarmAction, PrintFarmObservation, State]):
             done=payload.get("done", False),
             reward=payload.get("reward"),
             metadata=obs_data.get("metadata", {}),
+            reward_info=RewardBreakdown(**reward_info) if reward_info else None,
+            rubric_score=obs_data.get("rubric_score"),
         )
 
         return StepResult(

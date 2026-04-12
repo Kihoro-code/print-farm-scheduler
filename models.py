@@ -1,22 +1,16 @@
-"""
-Data models for the Print Farm Scheduler Environment.
+"""Data models for the Print Farm Scheduler environment."""
 
-These models define the action and observation types used by the OpenEnv
-integration for the print farm scheduling server.
-"""
+from typing import Dict, List, Literal, Optional
 
-from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, Field
 
-from pydantic import Field
-
-# Support both in-repo and standalone imports
 try:
     from openenv.core.env_server.types import Action, Observation
 except ImportError:
     from openenv.core.env_server.types import Action, Observation
 
 
-class MachineSnapshot(Action):
+class MachineSnapshot(BaseModel):
     """Snapshot of a single machine's current state."""
     id: int
     status: Literal["idle", "printing", "changing_spool"]
@@ -30,7 +24,7 @@ class MachineSnapshot(Action):
     job_total_steps: int = 0
 
 
-class JobSnapshot(Action):
+class JobSnapshot(BaseModel):
     """Snapshot of a single job's current state."""
     id: int
     material: str
@@ -61,9 +55,9 @@ class PrintFarmAction(Action):
     )
 
 
-class RewardBreakdown(Action):
+class RewardBreakdown(BaseModel):
     """Detailed reward breakdown for interpretability."""
-    value: float = Field(description="Total reward value in [-1.0, 1.0]")
+    value: float = Field(description="Total reward value in (0.0, 1.0)")
     breakdown: Dict[str, float] = Field(
         default_factory=dict, description="Component-wise reward breakdown"
     )
@@ -93,6 +87,9 @@ class PrintFarmObservation(Observation):
     total_jobs_ever: int = Field(0, description="Total jobs seen this episode")
     reward_info: Optional[RewardBreakdown] = Field(
         None, description="Reward breakdown from last step"
+    )
+    rubric_score: Optional[float] = Field(
+        None, description="Score produced by the OpenEnv rubric layer"
     )
 
 

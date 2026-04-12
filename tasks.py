@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable
 
+from simulator import clamp_task_score, score_difficulty
+
 
 @dataclass
 class Task:
@@ -17,7 +19,7 @@ class Task:
 
 def _clamp_score(score: float) -> float:
     """Clamp score to strictly between 0 and 1 (validator rejects 0.0 and 1.0)."""
-    return max(0.001, min(0.999, score))
+    return clamp_task_score(score)
 
 
 # ── Graders ─────────────────────────────────────────────────────────────────
@@ -32,7 +34,7 @@ def grade_easy(trajectory: list[dict]) -> float:
     total = _total_jobs(trajectory)
     if total == 0:
         return 0.001
-    return _clamp_score(round(completions / total, 4))
+    return score_difficulty("easy", completions / total, 0.0, 0.0)
 
 
 def grade_medium(trajectory: list[dict]) -> float:
@@ -48,8 +50,7 @@ def grade_medium(trajectory: list[dict]) -> float:
         return 0.001
 
     completion_rate = completions / total
-    score = 0.7 * completion_rate + 0.3 * utilization
-    return _clamp_score(round(score, 4))
+    return score_difficulty("medium", completion_rate, utilization, completion_rate)
 
 
 def grade_hard(trajectory: list[dict]) -> float:
@@ -66,8 +67,12 @@ def grade_hard(trajectory: list[dict]) -> float:
         return 0.001
 
     completion_rate = completions / total
-    score = 0.7 * completion_rate + 0.2 * utilization + 0.1 * preemption_efficiency
-    return _clamp_score(round(score, 4))
+    return score_difficulty(
+        "hard",
+        completion_rate,
+        utilization,
+        preemption_efficiency,
+    )
 
 
 # ── Grader Helpers ──────────────────────────────────────────────────────────
