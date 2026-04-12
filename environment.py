@@ -463,7 +463,7 @@ class PrintFarmEnv:
         if terminal_r != 0:
             breakdown["terminal_bonus"] = round(terminal_r, 4)
 
-        value = max(-1.0, min(1.0, round(raw, 4)))
+        value = max(0.001, min(0.999, round((raw + 1.0) / 2.0, 4)))
 
         parts = []
         if comps > 0:

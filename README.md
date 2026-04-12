@@ -6,6 +6,8 @@ colorTo: purple
 sdk: docker
 app_file: server/app.py
 pinned: false
+tags:
+  - openenv
 ---
 
 # 🏭 Print Farm Scheduler — OpenEnv RL Environment
