@@ -4,17 +4,11 @@ inference.py — OpenEnv hackathon baseline inference script.
 Must be in the project root. Reads credentials from environment variables.
 Emits structured stdout logs in [START]/[STEP]/[END] format.
 Must complete all 3 tasks in under 20 minutes on vcpu=2, memory=8gb.
-
-STDOUT FORMAT (official spec):
-    [START] task=<task_name> env=<benchmark> model=<model_name>
-    [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
-    [END]   success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
 """
 
-import os
 import json
+import os
 import sys
-from typing import List, Optional
 
 from openai import OpenAI
 
@@ -30,8 +24,6 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 if HF_TOKEN is None:
     raise ValueError("HF_TOKEN environment variable is required")
-BENCHMARK = "print-farm-scheduler"
-
 client = OpenAI(
     api_key=HF_TOKEN,
     base_url=API_BASE_URL,
@@ -40,32 +32,44 @@ client = OpenAI(
 
 # ── Score / reward helpers ───────────────────────────────────────────────────
 
-def _clamp_reward(r: float) -> float:
-    """Clamp reward to strictly (0, 1) — validator rejects 0.0 and 1.0."""
-    return max(0.001, min(0.999, (r + 1.0) / 2.0))
+def _clamp_open_interval(value: float) -> float:
+    """Clamp a normalized score to strictly (0, 1)."""
+    return max(0.001, min(0.999, float(value)))
 
 
 # ── Logging helpers (official format) ────────────────────────────────────────
 
-def log_start(task: str, env: str, model: str) -> None:
-    print(f"[START] task={task} env={env} model={model}", flush=True)
-
-
-def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
-    error_val = error if error else "null"
-    done_val = str(done).lower()
-    clamped = _clamp_reward(reward)
+def log_start(task: str, episode: int) -> None:
     print(
-        f"[STEP] step={step} action={action} reward={clamped:.2f} done={done_val} error={error_val}",
+        json.dumps({"tag": "[START]", "task": task, "episode": episode}),
         flush=True,
     )
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
-    clamped = [_clamp_reward(r) for r in rewards]
-    rewards_str = ",".join(f"{r:.2f}" for r in clamped)
+def log_step(step: int, action: Action, reward: float, done: bool) -> None:
     print(
-        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
+        json.dumps(
+            {
+                "tag": "[STEP]",
+                "step": step,
+                "action": action.model_dump(),
+                "reward": round(_clamp_open_interval(reward), 4),
+                "done": done,
+            }
+        ),
+        flush=True,
+    )
+
+
+def log_end(task: str, score: float) -> None:
+    print(
+        json.dumps(
+            {
+                "tag": "[END]",
+                "task": task,
+                "score": round(_clamp_open_interval(score), 4),
+            }
+        ),
         flush=True,
     )
 
@@ -184,18 +188,6 @@ def _same_family(mat_a: str, mat_b: str) -> bool:
     return families.get(mat_a) == families.get(mat_b)
 
 
-def _action_to_str(action: Action) -> str:
-    """Format action as a human-readable string for [STEP] log."""
-    if action.type == "assign":
-        return f"assign(machine_id={action.machine_id})"
-    elif action.type == "preempt":
-        return f"preempt(machine_id={action.machine_id})"
-    elif action.type == "prioritize":
-        return f"prioritize(job_id={action.job_id})"
-    else:
-        return "skip()"
-
-
 # ── Task Runner ──────────────────────────────────────────────────────────────
 
 
@@ -206,12 +198,10 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
     obs = env.reset()
     trajectory = []
     done = False
-    rewards: List[float] = []
-
     # [START] log — official format
-    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+    log_start(task=task_name, episode=episode)
 
-    step_n = 1
+    step_n = 0
     while not done:
         # Call LLM for action
         try:
@@ -248,7 +238,6 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
             action = heuristic_action(obs, env.state(), env._step_count)
 
         obs, reward, done, info = env.step(action)
-        rewards.append(reward.value)
 
         trajectory.append(
             {
@@ -262,19 +251,17 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
         # [STEP] log — official format
         log_step(
             step=step_n,
-            action=_action_to_str(action),
+            action=action,
             reward=reward.value,
             done=done,
-            error=None,
         )
         step_n += 1
 
     score = task.grader(trajectory)
-    success = score >= 0.1
 
     # [END] log — official format
-    log_end(success=success, steps=step_n - 1, rewards=rewards)
-    return score
+    log_end(task=task_name, score=score)
+    return _clamp_open_interval(score)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
