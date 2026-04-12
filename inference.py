@@ -37,41 +37,29 @@ def _clamp_open_interval(value: float) -> float:
     return max(0.001, min(0.999, float(value)))
 
 
+def _format_open_interval(value: float) -> str:
+    """Format a normalized score without rounding it to 0 or 1."""
+    return f"{_clamp_open_interval(value):.4f}"
+
+
 # ── Logging helpers (official format) ────────────────────────────────────────
 
-def log_start(task: str, episode: int) -> None:
-    print(
-        json.dumps({"tag": "[START]", "task": task, "episode": episode}),
-        flush=True,
-    )
+def log_start(task: str) -> None:
+    print(f"[START] task={task}", flush=True)
 
 
 def log_step(step: int, action: Action, reward: float, done: bool) -> None:
     print(
-        json.dumps(
-            {
-                "tag": "[STEP]",
-                "step": step,
-                "action": action.model_dump(),
-                "reward": round(_clamp_open_interval(reward), 4),
-                "done": done,
-            }
+        (
+            f"[STEP] step={step} action={_action_to_str(action)} "
+            f"reward={_format_open_interval(reward)} done={str(done).lower()}"
         ),
         flush=True,
     )
 
 
-def log_end(task: str, score: float) -> None:
-    print(
-        json.dumps(
-            {
-                "tag": "[END]",
-                "task": task,
-                "score": round(_clamp_open_interval(score), 4),
-            }
-        ),
-        flush=True,
-    )
+def log_end(task: str, score: float, steps: int) -> None:
+    print(f"[END] task={task} score={_format_open_interval(score)} steps={steps}", flush=True)
 
 
 # ── LLM System Prompt ────────────────────────────────────────────────────────
@@ -188,6 +176,17 @@ def _same_family(mat_a: str, mat_b: str) -> bool:
     return families.get(mat_a) == families.get(mat_b)
 
 
+def _action_to_str(action: Action) -> str:
+    """Format action for the validator-friendly [STEP] logs."""
+    if action.type == "assign":
+        return f"assign(machine_id={action.machine_id})"
+    if action.type == "preempt":
+        return f"preempt(machine_id={action.machine_id})"
+    if action.type == "prioritize":
+        return f"prioritize(job_id={action.job_id})"
+    return "skip()"
+
+
 # ── Task Runner ──────────────────────────────────────────────────────────────
 
 
@@ -199,9 +198,9 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
     trajectory = []
     done = False
     # [START] log — official format
-    log_start(task=task_name, episode=episode)
+    log_start(task=task_name)
 
-    step_n = 0
+    step_n = 1
     while not done:
         # Call LLM for action
         try:
@@ -260,7 +259,7 @@ def run_task(task_name: str, episode: int = 0, seed: int = 42) -> float:
     score = task.grader(trajectory)
 
     # [END] log — official format
-    log_end(task=task_name, score=score)
+    log_end(task=task_name, score=score, steps=step_n - 1)
     return _clamp_open_interval(score)
 
 
